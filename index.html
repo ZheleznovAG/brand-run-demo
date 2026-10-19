@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Brand Run</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { --bg: #F6EBDD; --ink: #2B1A10; --accent: #E8833A; --card: #FFFFFFEE; --ok: #2E7D32; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+    #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: var(--bg); }
+    .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; }
+    .screen.on { display: flex; }
+    .card { width: min(92vw, 380px); background: var(--card); border-radius: 24px; padding: 26px 22px; text-align: center;
+      box-shadow: 0 12px 40px rgba(43, 26, 16, .18); }
+    h1 { margin: 0 0 4px; font-size: 34px; line-height: 1.05; letter-spacing: -.5px; }
+    .brand { font-size: 15px; opacity: .7; margin-bottom: 14px; }
+    p { margin: 10px 0; font-size: 16px; line-height: 1.4; }
+    .goal { background: #FFF4E6; border-radius: 14px; padding: 10px 12px; font-size: 15px; }
+    button { appearance: none; border: 0; width: 100%; margin-top: 14px; padding: 16px; border-radius: 16px; font-size: 19px; font-weight: 700;
+      background: var(--accent); color: #fff; cursor: pointer; }
+    button.ghost { background: transparent; color: var(--ink); border: 2px solid rgba(43, 26, 16, .2); font-size: 16px; padding: 12px; }
+    #logo { position: fixed; left: 0; right: 0; top: 20%; text-align: center; font-size: 13vmin; font-weight: 900; letter-spacing: -1px;
+      color: var(--ink); opacity: .07; pointer-events: none; white-space: nowrap; }
+    #hud { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 0; right: 0; display: none; justify-content: space-between;
+      padding: 0 18px; font-size: 26px; font-weight: 800; pointer-events: none; text-shadow: 0 2px 0 #fff8; }
+    #hud.on { display: flex; }
+    #goalbar { position: fixed; top: calc(max(12px, env(safe-area-inset-top)) + 40px); left: 18px; right: 18px; height: 8px; border-radius: 4px;
+      background: rgba(43, 26, 16, .12); display: none; pointer-events: none; overflow: hidden; }
+    #goalbar.on { display: block; }
+    #goalfill { height: 100%; width: 0; background: var(--ok); transition: width .15s; }
+    .big { font-size: 56px; font-weight: 900; margin: 6px 0; }
+    .promo { margin: 12px 0 4px; padding: 14px; border: 2px dashed var(--ok); border-radius: 14px; background: #F1F8F1; }
+    .code { font-size: 28px; font-weight: 900; letter-spacing: 2px; color: var(--ok); }
+    #loading .bar { height: 10px; border-radius: 5px; background: rgba(43, 26, 16, .12); overflow: hidden; margin-top: 16px; }
+    #loading .fill { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .small { font-size: 13px; opacity: .65; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+
+  <div id="loading" class="screen on"><div class="card">
+    <h1 id="l-title">Brand Run</h1>
+    <div class="brand" id="l-brand"></div>
+    <div class="bar"><div class="fill" id="l-fill"></div></div>
+    <p class="small">Загрузка…</p>
+  </div></div>
+
+  <div id="start" class="screen"><div class="card">
+    <h1 id="s-title">Brand Run</h1>
+    <div class="brand" id="s-brand"></div>
+    <p id="s-hello">Касание — прыжок, двойное касание — двойной прыжок. Собирай зёрна, перепрыгивай коробки.</p>
+    <div class="goal" id="s-goal"></div>
+    <p class="small" id="s-best"></p>
+    <button id="b-play">Играть</button>
+  </div></div>
+
+  <div id="logo"></div>
+  <div id="hud"><span id="h-score">0</span><span id="h-best"></span></div>
+  <div id="goalbar"><div id="goalfill"></div></div>
+
+  <div id="over" class="screen"><div class="card">
+    <div class="small">Ваш результат</div>
+    <div class="big" id="o-score">0</div>
+    <p class="small" id="o-details"></p>
+    <div id="o-promo" class="promo" style="display:none">
+      <div id="o-prize"></div>
+      <div class="code" id="o-code"></div>
+      <div class="small">Покажите код на кассе</div>
+    </div>
+    <p id="o-more"></p>
+    <button id="b-again">Ещё раз</button>
+    <button id="b-send" class="ghost" style="display:none">Отправить результат в бот</button>
+  </div></div>
+
+  <script>
+    // Everything brand-specific lives here: a new client = a new BRAND object, no Unity rebuild.
+    const BRAND = {
+      title: "Зерно Ран",
+      name: "Кофейня «Зерно» · демо",
+      logo: "ЗЕРНО",
+      goal: 300,
+      prize: "−15% на любой напиток",
+      promo: "ZERNO15",
+      colors: { sky: "#F6EBDD", hills: "#EAD7C0", ground: "#8B5A3C", groundTop: "#6B3E26", player: "#E8833A",
+                bean: "#5A3220", cup: "#FFFFFF", cupBand: "#2E7D32", crate: "#B07A4F", crateLines: "#7A4E2D" }
+    };
+
+    const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+    const inTelegram = !!(tg && tg.platform && tg.platform !== "unknown");
+    const $ = id => document.getElementById(id);
+    const show = id => document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+    const bestKey = "brandrun_best";
+    let best = 0, unity = null, playing = false, lastResult = null;
+    try { best = +localStorage.getItem(bestKey) || 0; } catch (e) {}
+
+    if (inTelegram) {
+      tg.ready();
+      tg.expand();
+      if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); // a swipe must not close the game mid-run
+      if (tg.setHeaderColor) try { tg.setHeaderColor(BRAND.colors.sky); tg.setBackgroundColor(BRAND.colors.sky); } catch (e) {}
+    }
+    const haptic = (kind) => { try { inTelegram && tg.HapticFeedback && (kind === "error"
+      ? tg.HapticFeedback.notificationOccurred("error") : tg.HapticFeedback.impactOccurred(kind)); } catch (e) {} };
+
+    document.documentElement.style.setProperty("--bg", BRAND.colors.sky);
+    document.documentElement.style.setProperty("--accent", BRAND.colors.player);
+    ["l-title", "s-title"].forEach(id => $(id).textContent = BRAND.title);
+    $("logo").textContent = BRAND.logo;
+    ["l-brand", "s-brand"].forEach(id => $(id).textContent = BRAND.name);
+    $("s-goal").innerHTML = `Набери <b>${BRAND.goal}</b> очков — получи промокод: <b>${BRAND.prize}</b>`;
+    const name = inTelegram && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.first_name : "";
+    if (name) $("s-hello").textContent = `${name}, касание — прыжок, двойное касание — двойной прыжок. Собирай зёрна, перепрыгивай коробки.`;
+
+    function renderBest() {
+      $("s-best").textContent = best ? `Ваш рекорд: ${best}` : "";
+      $("h-best").textContent = best ? `★ ${best}` : "";
+    }
+    renderBest();
+
+    function start() {
+      if (!unity) return;
+      playing = true;
+      show(null);
+      $("hud").classList.add("on");
+      $("goalbar").classList.add("on");
+      $("h-score").textContent = "0";
+      $("goalfill").style.width = "0";
+      unity.SendMessage("Game", "StartGame");
+    }
+
+    // Unity -> page (see Assets/Plugins/WebGL/BrandRunBridge.jslib)
+    window.BrandRun = {
+      onReady() {
+        // Unity's Start() can fire before createUnityInstance() resolves; finish once we have the instance.
+        if (!unity) { window.__brPendingReady = true; return; }
+        unity.SendMessage("Game", "Configure", JSON.stringify(BRAND.colors));
+        show("start");
+      },
+      onScore(score) {
+        $("h-score").textContent = score;
+        $("goalfill").style.width = Math.min(100, 100 * score / BRAND.goal) + "%";
+      },
+      onCollect(kind) { haptic(kind === 2 ? "medium" : "light"); },
+      onGameOver(score, beans, meters) {
+        playing = false;
+        haptic("error");
+        const isRecord = score > best;
+        if (isRecord) { best = score; try { localStorage.setItem(bestKey, best); } catch (e) {} }
+        lastResult = { score, beans, meters, best };
+        $("o-score").textContent = score;
+        $("o-details").textContent = `${meters} м · зёрен: ${beans}` + (isRecord ? " · новый рекорд!" : "");
+        const won = score >= BRAND.goal;
+        $("o-promo").style.display = won ? "block" : "none";
+        $("o-prize").textContent = BRAND.prize;
+        $("o-code").textContent = BRAND.promo;
+        $("o-more").textContent = won ? "" : `До промокода не хватило ${BRAND.goal - score} очков — попробуйте ещё!`;
+        $("b-send").style.display = inTelegram ? "block" : "none";
+        renderBest();
+        setTimeout(() => { $("hud").classList.remove("on"); $("goalbar").classList.remove("on"); show("over"); }, 600);
+      }
+    };
+
+    $("b-play").onclick = start;
+    $("b-again").onclick = start;
+    $("b-send").onclick = () => {
+      // Works when the game was opened from the bot's keyboard button; the bot keeps the leaderboard.
+      try { tg.sendData(JSON.stringify(lastResult)); } catch (e) { tg.showAlert && tg.showAlert("Откройте игру кнопкой в боте, чтобы отправить результат."); }
+    };
+
+    // One input path for every device: touch, mouse, keyboard. Buttons keep their own clicks.
+    const jump = (e) => {
+      if (!playing || !unity) return;
+      if (e.target.closest && e.target.closest("button")) return;
+      e.preventDefault();
+      unity.SendMessage("Game", "Jump");
+    };
+    window.addEventListener("pointerdown", jump, { passive: false });
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); playing ? unity.SendMessage("Game", "Jump") : (unity && $("start").classList.contains("on") && start()); }
+    });
+
+    const canvas = $("unity-canvas");
+    const config = {
+      dataUrl: "Build/WebGL.data.unityweb",
+      frameworkUrl: "Build/WebGL.framework.js.unityweb",
+      codeUrl: "Build/WebGL.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "Demo",
+      productName: "Brand Run",
+      productVersion: "1.0",
+      matchWebGLToCanvasSize: true,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+    };
+    const script = document.createElement("script");
+    script.src = "Build/WebGL.loader.js";
+    script.onload = () => {
+      createUnityInstance(canvas, config, p => { $("l-fill").style.width = (100 * p) + "%"; })
+        .then(instance => { unity = instance; if (window.__brPendingReady) window.BrandRun.onReady(); })
+        .catch(err => { document.querySelector("#loading .small").textContent = "Не удалось загрузить игру: " + err; });
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
