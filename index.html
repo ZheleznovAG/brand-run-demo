@@ -158,7 +158,9 @@
         $("o-prize").textContent = BRAND.prize;
         $("o-code").textContent = BRAND.promo;
         $("o-more").textContent = won ? "" : `До промокода не хватило ${BRAND.goal - score} очков — попробуйте ещё!`;
-        $("b-send").style.display = inTelegram ? "block" : "none";
+        // sendData works only when the game was opened from the bot's keyboard button; such launches carry no query_id.
+        const canSend = inTelegram && !(tg.initDataUnsafe && tg.initDataUnsafe.query_id);
+        $("b-send").style.display = canSend ? "block" : "none";
         renderBest();
         setTimeout(() => { $("hud").classList.remove("on"); $("goalbar").classList.remove("on"); show("over"); }, 600);
       }
