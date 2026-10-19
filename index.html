@@ -158,9 +158,7 @@
         $("o-prize").textContent = BRAND.prize;
         $("o-code").textContent = BRAND.promo;
         $("o-more").textContent = won ? "" : `До промокода не хватило ${BRAND.goal - score} очков — попробуйте ещё!`;
-        // sendData works only when the game was opened from the bot's keyboard button; such launches carry no query_id.
-        const canSend = inTelegram && !(tg.initDataUnsafe && tg.initDataUnsafe.query_id);
-        $("b-send").style.display = canSend ? "block" : "none";
+        $("b-send").style.display = inTelegram ? "block" : "none";
         renderBest();
         setTimeout(() => { $("hud").classList.remove("on"); $("goalbar").classList.remove("on"); show("over"); }, 600);
       }
@@ -169,8 +167,10 @@
     $("b-play").onclick = start;
     $("b-again").onclick = start;
     $("b-send").onclick = () => {
-      // Works when the game was opened from the bot's keyboard button; the bot keeps the leaderboard.
-      try { tg.sendData(JSON.stringify(lastResult)); } catch (e) { tg.showAlert && tg.showAlert("Откройте игру кнопкой в боте, чтобы отправить результат."); }
+      // sendData works only when the game was opened from the bot's keyboard button; other launches carry a query_id.
+      const hint = "Чтобы сохранить результат в таблице рекордов, откройте игру кнопкой «▶️ Играть» внизу чата с ботом.";
+      if (tg.initDataUnsafe && tg.initDataUnsafe.query_id) { tg.showAlert(hint); return; }
+      try { tg.sendData(JSON.stringify(lastResult)); } catch (e) { tg.showAlert(hint); }
     };
 
     // One input path for every device: touch, mouse, keyboard. Buttons keep their own clicks.
